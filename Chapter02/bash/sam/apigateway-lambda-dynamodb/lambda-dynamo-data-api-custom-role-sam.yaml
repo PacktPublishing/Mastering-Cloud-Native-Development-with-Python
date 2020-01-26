@@ -1,0 +1,101 @@
+﻿AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: >-
+  This Lambda is invoked by API Gateway and queries DynamoDB.
+Parameters:
+    PythonVersion:
+        Default: python3.7
+        Type: String
+    AccountId:
+        Default: 000000000000
+        Type: String
+    DynamoTableName:
+        Default: user-visits-sam
+        Type: String
+    FunctionName:
+        Default: lambda-dynamo-data-api-sam
+        Type: String
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+Resources:
+  LambdaDynamoDataApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_query_dynamo.lambda_handler
+      Runtime: !Sub '${PythonVersion}'
+      CodeUri: '../../../package/lambda-dynamo-data-api.zip'
+      FunctionName: !Sub '${FunctionName}'
+      Description: >-
+        This Lambda is invoked by API Gateway and queries DynamoDB.
+      MemorySize: 128
+      Timeout: 3  
+      Role: !Sub 'arn:aws:iam::${AccountId}:role/lambda-dynamo-data-api'
+      Environment:
+        Variables:
+          DYNAMO_TABLE_NAME: !Sub '${DynamoTableName}'
+      Events:
+        GetResource:
+          Type: Api
+          Properties:
+            Path: /visits/{resourceId}
+            Method: GET
+        PostResource:
+          Type: Api
+          Properties:
+            Path: /visits
+            Method: POST
+        PutResource:
+          Type: Api
+          Properties:
+            Path: /visits
+            Method: PUT
+        DeleteResource:
+          Type: Api
+          Properties:
+            Path: /visits
+            Method: DELETE
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete #Retain
+    Properties: 
+      TableName: !Sub '${DynamoTableName}'
+      SSESpecification: 
+        SSEEnabled: True      
+      AttributeDefinitions: 
+        - AttributeName: EventId
+          AttributeType: S
+        - AttributeName: EventDay
+          AttributeType: N
+      KeySchema: 
+        - AttributeName: EventId
+          KeyType: HASH
+        - AttributeName: EventDay
+          KeyType: RANGE
+      ProvisionedThroughput: 
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+  ServerlessRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+Outputs:
+  ApiEndpoint:
+    Description: "API Prod stage endpoint"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/visits"
+    Export:
+      Name: ApiEndpoint
+  ApiGatewayRestApiId:
+    Description: 'API Gateway ARN for Basic AWS API Gateway'
+    Value: !Ref ServerlessRestApi
+    Export:
+      Name: ServerlessRestApi-RestApiId
+  ApiGatewayRootResourceId:
+    Description: 'API Gateway Resource AWS API Gateway'
+    Value: !GetAtt ServerlessRestApi.RootResourceId
+    Export:
+      Name: ServerlessRestApi-RootResourceId
